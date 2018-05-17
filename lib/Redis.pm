@@ -21,6 +21,8 @@ use Scalar::Util ();
 
 use Redis::Sentinel;
 
+use constant SSL_AVAILABLE => eval { require IO::Socket::SSL };
+
 use constant WIN32       => $^O =~ /mswin32/i;
 use constant EWOULDBLOCK => eval {Errno::EWOULDBLOCK} || -1E9;
 use constant EAGAIN      => eval {Errno::EAGAIN} || -1E9;
@@ -134,11 +136,23 @@ sub new {
                       )
                   ];
               }
-              
+
+              my $socket_class;
+
+              if (exists $args{ssl} and $args{ssl}) {
+                  if ( ! SSL_AVAILABLE ) {
+                      croak("Require IO::Socket::SSL to connect to Redis using SSL!");
+                  }
+
+                  $socket_class = 'IO::Socket::SSL';
+              }
+              else {
+                  $socket_class = 'IO::Socket::INET';
+              }
+
               return $self->_maybe_enable_timeouts(
-                  IO::Socket::INET->new(
+                  $socket_class->new(
                       PeerAddr => $server_address,
-                      Proto    => 'tcp',
                       ( $self->{cnx_timeout} ? ( Timeout => $self->{cnx_timeout} ) : () ),
                   )
               );
@@ -149,10 +163,23 @@ sub new {
     $self->{server} = exists $args{server} ? $args{server} : '127.0.0.1:6379';
     $self->{builder} = sub {
         my ($self) = @_;
-        $self->_maybe_enable_timeouts(
-            IO::Socket::INET->new(
+
+        my $socket_class;
+
+        if (exists $args{ssl} and $args{ssl}) {
+            if ( ! SSL_AVAILABLE ) {
+                croak("Require IO::Socket::SSL to connect to Redis using SSL!");
+            }
+
+            $socket_class = 'IO::Socket::SSL';
+        }
+        else {
+            $socket_class = 'IO::Socket::INET';
+        }
+
+        return $self->_maybe_enable_timeouts(
+            $socket_class->new(
                 PeerAddr => $self->{server},
-                Proto    => 'tcp',
                 ( $self->{cnx_timeout} ? ( Timeout => $self->{cnx_timeout} ) : () ),
             )
         );
