@@ -7,11 +7,18 @@ use Redis;
 use lib 't/tlib';
 use Test::SpawnRedisServer;
 
-my ($c, $srv) = redis();
-END { $c->() if $c }
+use constant SSL_AVAILABLE => eval { require IO::Socket::SSL } || 0;
+
+my ($c, $t, $srv) = redis();
+END {
+  $c->() if $c;
+  $t->() if $t;
+}
 
 subtest 'non-block TCP' => sub {
-  ok(my $r = Redis->new(server => $srv), 'connected to our test redis-server via TCP');
+  ok(my $r = Redis->new(server => $srv,
+                        ssl => SSL_AVAILABLE,
+                        SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE), 'connected to our test redis-server via TCP');
 
   ## Try to read from server (nothing sent, so nothing to read)
   ## But kill if we block

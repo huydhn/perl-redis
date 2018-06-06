@@ -10,10 +10,16 @@ use Redis::Sentinel;
 use lib 't/tlib';
 use Test::SpawnRedisServer;
 
+use constant SSL_AVAILABLE => eval { require IO::Socket::SSL } || 0;
+
 my @ret = redis();
 my $redis_port = pop @ret;
-my ($c, $redis_addr) = @ret;
-END { diag 'shutting down redis'; $c->() if $c }
+my ($c, $t, $redis_addr) = @ret;
+END {
+  diag 'shutting down redis';
+  $c->() if $c;
+  $t->() if $t;
+}
 
 diag "redis address : $redis_addr\n";
 

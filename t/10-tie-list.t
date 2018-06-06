@@ -7,13 +7,21 @@ use Redis::List;
 use lib 't/tlib';
 use Test::SpawnRedisServer;
 
-my ($c, $srv) = redis();
-END { $c->() if $c }
+use constant SSL_AVAILABLE => eval { require IO::Socket::SSL } || 0;
+
+my ($c, $t, $srv) = redis();
+END {
+  $c->() if $c;
+  $t->() if $t;
+}
 
 
 ## Setup
 my @my_list;
-ok(my $redis = tie(@my_list, 'Redis::List', 'my_list', server => $srv), 'tied to our test redis-server');
+ok(my $redis = tie(@my_list, 'Redis::List', 'my_list',
+                   server => $srv,
+                   ssl => SSL_AVAILABLE,
+                   SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE), 'tied to our test redis-server');
 ok($redis->ping, 'pinged fine');
 isa_ok($redis, 'Redis::List');
 
