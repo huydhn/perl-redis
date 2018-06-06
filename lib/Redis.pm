@@ -28,7 +28,12 @@ use constant EWOULDBLOCK => eval {Errno::EWOULDBLOCK} || -1E9;
 use constant EAGAIN      => eval {Errno::EAGAIN} || -1E9;
 use constant EINTR       => eval {Errno::EINTR} || -1E9;
 use constant ECONNRESET  => eval {Errno::ECONNRESET} || -1E9;
-use constant BUFSIZE     => 4096;
+
+# According to IO::Socket::SSL perldoc, 16k is the maximum
+# size of an SSL frame and because sysread returns data from
+# only a single SSL frame you guarantee this way, that there
+# are no pending data.
+use constant BUFSIZE     => 16_384;
 
 sub _maybe_enable_timeouts {
     my ($self, $socket) = @_;
@@ -139,22 +144,25 @@ sub new {
 
               my $socket_class;
 
+              my %socket_args = (
+                  PeerAddr => $server_address,
+                  ( $self->{cnx_timeout} ? ( Timeout => $self->{cnx_timeout} ) : () ),
+              );
+
               if (exists $args{ssl} and $args{ssl}) {
                   if ( ! SSL_AVAILABLE ) {
                       croak("Require IO::Socket::SSL to connect to Redis using SSL!");
                   }
 
                   $socket_class = 'IO::Socket::SSL';
+                  $socket_args{SSL_verify_mode} = $args{SSL_verify_mode} // 1;
               }
               else {
                   $socket_class = 'IO::Socket::INET';
               }
 
               return $self->_maybe_enable_timeouts(
-                  $socket_class->new(
-                      PeerAddr => $server_address,
-                      ( $self->{cnx_timeout} ? ( Timeout => $self->{cnx_timeout} ) : () ),
-                  )
+                  $socket_class->new(%socket_args)
               );
           }
           croak($status || "failed to connect to any of the sentinels");
@@ -166,22 +174,25 @@ sub new {
 
         my $socket_class;
 
+        my %socket_args = (
+            PeerAddr => $self->{server},
+            ( $self->{cnx_timeout} ? ( Timeout => $self->{cnx_timeout} ) : () ),
+        );
+
         if (exists $args{ssl} and $args{ssl}) {
             if ( ! SSL_AVAILABLE ) {
                 croak("Require IO::Socket::SSL to connect to Redis using SSL!");
             }
 
             $socket_class = 'IO::Socket::SSL';
+            $socket_args{SSL_verify_mode} = $args{SSL_verify_mode} // 1;
         }
         else {
             $socket_class = 'IO::Socket::INET';
         }
 
         return $self->_maybe_enable_timeouts(
-            $socket_class->new(
-                PeerAddr => $self->{server},
-                ( $self->{cnx_timeout} ? ( Timeout => $self->{cnx_timeout} ) : () ),
-            )
+            $socket_class->new(%socket_args)
         );
     };
   }
@@ -459,12 +470,27 @@ sub wait_for_messages {
       $s->remove($s->handles);
       $s->add($sock);
 
-      while ($s->can_read($timeout)) {      
+      while ($s->can_read($timeout)) {
         my $has_stuff = $self->__try_read_sock($sock);
         # If the socket is ready to read but there is nothing to read, ( so
         # it's an EOF ), try to reconnect.
         defined $has_stuff
           or $self->__throw_reconnect('EOF from server');
+
+        my $cond;
+
+        if ( ! SSL_AVAILABLE ) {
+          $cond = sub {
+            # if __try_read_sock() return 0 (no data)
+            # or undef ( socket became EOF), back to select until timeout
+            return $self->{__buf} || $self->__try_read_sock($sock);
+          }
+        } else {
+          $cond = sub {
+            # continue if there is still some data left
+            return $self->{__buf} || $sock->pending;
+          }
+        }
 
         do {
           my ($reply, $error) = $self->__read_response('WAIT_FOR_MESSAGES');
@@ -472,11 +498,9 @@ sub wait_for_messages {
           $self->__process_pubsub_msg($reply);
           $count++;
 
-          # if __try_read_sock() return 0 (no data)
-          # or undef ( socket became EOF), back to select until timeout
-        } while ($self->{__buf} || $self->__try_read_sock($sock));
+        } while ($cond->());
       }
-    
+
     });
 
   } catch {
@@ -725,10 +749,14 @@ sub __send_command {
     $buf .= defined($bin) ? '$' . length($bin) . "\r\n$bin\r\n" : "\$-1\r\n";
   }
 
-  ## Check to see if socket was closed: reconnect on EOF
-  my $status = $self->__try_read_sock($sock);
-  $self->__throw_reconnect('Not connected to any server')
-    unless defined $status;
+  if ( ! SSL_AVAILABLE ) {
+    # Check to see if socket was closed: reconnect on EOF.  Note that
+    # this function work differently with SSL socket cause it's not
+    # possible to read just a few bytes from a TLS frame.
+    my $status = $self->__try_read_sock($sock);
+    $self->__throw_reconnect('Not connected to any server')
+      unless defined $status;
+  }
 
   ## Send command, take care for partial writes
   warn "[SEND RAW] $buf" if $deb;
@@ -873,14 +901,22 @@ sub __try_read_sock {
           $err = 0 + $!;
           __fh_nonblocking_win32($sock, 0);
       } else {
-          $res = recv($sock, $data, BUFSIZE, MSG_DONTWAIT);
-          $err = 0 + $!;
+          if (SSL_AVAILABLE) {
+              # Use peek to see if there is any data available instead of reading
+              # it cause it's not possible to read only a few bytes from an SSL
+              # frame.
+              $res = $sock->peek($data, BUFSIZE);
+              $err = 0 + $!;
+          } else {
+              $res = recv($sock, $data, BUFSIZE, MSG_DONTWAIT);
+              $err = 0 + $!;
+          }
       }
 
       if (defined $res) {
         ## have read some data
         if (length($data)) {
-            $self->{__buf} .= $data;
+            $self->{__buf} .= $data unless SSL_AVAILABLE;
             return 1;
         }
 
