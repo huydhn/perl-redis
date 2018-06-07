@@ -154,10 +154,12 @@ sub new {
                       croak("IO::Socket::SSL is required for connecting to Redis using SSL");
                   }
 
+                  $self->{ssl}  = 1;
                   $socket_class = 'IO::Socket::SSL';
                   $socket_args{SSL_verify_mode} = $args{SSL_verify_mode} // 1;
               }
               else {
+                  $self->{ssl}  = 0;
                   $socket_class = 'IO::Socket::INET';
               }
 
@@ -184,10 +186,12 @@ sub new {
                 croak("IO::Socket::SSL is required for connecting to Redis using SSL");
             }
 
+            $self->{ssl}  = 1;
             $socket_class = 'IO::Socket::SSL';
             $socket_args{SSL_verify_mode} = $args{SSL_verify_mode} // 1;
         }
         else {
+            $self->{ssl}  = 0;
             $socket_class = 'IO::Socket::INET';
         }
 
@@ -479,7 +483,7 @@ sub wait_for_messages {
 
         my $cond;
 
-        if ( ! SSL_AVAILABLE ) {
+        if ( ! $self->{ssl} ) {
           $cond = sub {
             # if __try_read_sock() return 0 (no data)
             # or undef ( socket became EOF), back to select until timeout
@@ -750,14 +754,12 @@ sub __send_command {
     $buf .= defined($bin) ? '$' . length($bin) . "\r\n$bin\r\n" : "\$-1\r\n";
   }
 
-  if ( ! SSL_AVAILABLE ) {
-    # Check to see if socket was closed: reconnect on EOF.  Note that
-    # this function works differently with a SSL socket cause it's not
-    # possible to read just a few bytes from a TLS frame.
-    my $status = $self->__try_read_sock($sock);
-    $self->__throw_reconnect('Not connected to any server')
-      unless defined $status;
-  }
+  # this function works differently with a SSL socket cause it's not
+  # Check to see if socket was closed: reconnect on EOF.  Note that
+  # possible to read just a few bytes from a TLS frame.
+  my $status = $self->__try_read_sock($sock);
+  $self->__throw_reconnect('Not connected to any server')
+    unless defined $status;
 
   ## Send command, take care for partial writes
   warn "[SEND RAW] $buf" if $deb;
@@ -902,11 +904,13 @@ sub __try_read_sock {
           $err = 0 + $!;
           __fh_nonblocking_win32($sock, 0);
       } else {
-          if (SSL_AVAILABLE) {
+          if ($self->{ssl}) {
               # Use peek to see if there is any data available instead of reading
               # it cause it's not possible to read only a few bytes from an SSL
-              # frame.
+              # frame.  This does not work in WIN32
+              $sock->blocking(0);
               $res = $sock->peek($data, BUFSIZE);
+              $sock->blocking(1);
           } else {
               $res = recv($sock, $data, BUFSIZE, MSG_DONTWAIT);
           }
@@ -917,7 +921,7 @@ sub __try_read_sock {
       if (defined $res) {
         ## have read some data
         if (length($data)) {
-            $self->{__buf} .= $data unless SSL_AVAILABLE;
+            $self->{__buf} .= $data unless $self->{ssl};
             return 1;
         }
 
