@@ -14,9 +14,11 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
+
 my $o = Redis->new(server => $srv,
                    name => 'my_name_is_glorious',
-                   ssl => SSL_AVAILABLE,
+                   ssl => $use_ssl,
                    SSL_verify_mode => 0);
 is $o->info->{connected_clients}, 1;
 my $localport = $o->{sock}->sockport;

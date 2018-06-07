@@ -15,9 +15,11 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
+
 subtest 'client_{set|get}name commands' => sub {
   ok(my $r = Redis->new(server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
 
   my @clients = $r->client_list;
@@ -35,19 +37,19 @@ subtest 'client_{set|get}name commands' => sub {
 subtest 'client name via constructor' => sub {
   ok(my $r = Redis->new(server => $srv,
                         name => 'buuu',
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server, with a name');
   is($r->client_getname, 'buuu', '...... name was properly set');
 
   ok($r = Redis->new(server => $srv,
                      name => sub {"cache-for-$$"},
-                     ssl => SSL_AVAILABLE,
+                     ssl => $use_ssl,
                      SSL_verify_mode => 0), '... with a dynamic name');
   is($r->client_getname, "cache-for-$$", '...... name was properly set');
 
   ok($r = Redis->new(server => $srv,
                      name => sub {undef},
-                     ssl => SSL_AVAILABLE,
+                     ssl => $use_ssl,
                      SSL_verify_mode => 0), '... with a dynamic name, but returning undef');
   is($r->client_getname, undef, '...... name was not set');
 
@@ -55,7 +57,7 @@ subtest 'client name via constructor' => sub {
   for (1 .. 3) {
     ok($r = Redis->new(server => $srv,
                        name => sub { "gen-$$-" . ++$generation },
-                       ssl => SSL_AVAILABLE, SSL_verify_mode => 0),
+                       ssl => $use_ssl, SSL_verify_mode => 0),
       "Using dynamic name, for generation $generation");
     my $n = "gen-$$-$generation";
     is($r->client_getname, $n, "... name was set properly, '$n'");

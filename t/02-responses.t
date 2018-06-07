@@ -18,9 +18,10 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
 
 ok(my $r = Redis->new(server => $srv,
-                      ssl => SSL_AVAILABLE,
+                      ssl => $use_ssl,
                       SSL_verify_mode => 0), 'connected to our test redis-server');
 
 sub r {

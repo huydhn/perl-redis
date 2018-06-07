@@ -12,7 +12,8 @@ use Test::SpawnRedisServer;
 
 use constant SSL_AVAILABLE => eval { require IO::Socket::SSL } || 0;
 
-my @ret = redis();
+# Sentinel mode does not support SSL/TLS yet.
+my @ret = redis(no_ssl => 1);
 my $redis_port = pop @ret;
 my ($c, $t, $redis_addr) = @ret;
 END {
@@ -21,7 +22,11 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
+
 diag "redis address : $redis_addr\n";
+
+sleep(60);
 
 my @ret2 = sentinel( redis_port => $redis_port );
 my $sentinel_port = pop @ret2;

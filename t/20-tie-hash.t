@@ -16,12 +16,13 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
 
 ## Setup
 my %my_hash;
 ok(my $redis = tie(%my_hash, 'Redis::Hash', 'my_hash',
                    server => $srv,
-                   ssl => SSL_AVAILABLE,
+                   ssl => $use_ssl,
                    SSL_verify_mode => 0), 'tied to our test redis-server');
 ok($redis->ping, 'pinged fine');
 isa_ok($redis, 'Redis::Hash');

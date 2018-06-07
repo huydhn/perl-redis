@@ -17,9 +17,11 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
+
 {
 my $r = Redis->new(server => $srv,
-                   ssl => SSL_AVAILABLE,
+                   ssl => $use_ssl,
                    SSL_verify_mode => 0);
 eval { $r->publish( 'aa', 'v1' ) };
 plan 'skip_all' => "pubsub not implemented on this redis server"  if $@ && $@ =~ /unknown command/;
@@ -37,10 +39,10 @@ END {
 subtest 'basics' => sub {
   my %got;
   ok(my $pub = Redis->new(server => $srv,
-                          ssl => SSL_AVAILABLE,
+                          ssl => $use_ssl,
                           SSL_verify_mode => 0), 'connected to our test redis-server (pub)');
   ok(my $sub = Redis->new(server => $srv,
-                          ssl => SSL_AVAILABLE,
+                          ssl => $use_ssl,
                           SSL_verify_mode => 0), 'connected to our test redis-server (sub)');
 
   is($pub->publish('aa', 'v1'), 0, "No subscribers to 'aa' topic");
@@ -149,8 +151,8 @@ subtest 'basics' => sub {
 
 subtest 'zero_topic' => sub {
   my %got;
-  my $pub = Redis->new(server => $srv, ssl => SSL_AVAILABLE, SSL_verify_mode => 0);
-  my $sub = Redis->new(server => $srv, ssl => SSL_AVAILABLE, SSL_verify_mode => 0);
+  my $pub = Redis->new(server => $srv, ssl => $use_ssl, SSL_verify_mode => 0);
+  my $sub = Redis->new(server => $srv, ssl => $use_ssl, SSL_verify_mode => 0);
 
   my $db_size = -1;
   $sub->dbsize(sub { $db_size = $_[0] });
@@ -174,7 +176,7 @@ subtest 'server is killed while waiting for subscribe' => sub {
 
   if ($pid) {    ## parent, we'll wait for the child to die quickly
     ok(my $sync = Redis->new(server => $srv,
-                             ssl => SSL_AVAILABLE,
+                             ssl => $use_ssl,
                              SSL_verify_mode => 0), 'connected to our test redis-server (sync parent)');
     BAIL_OUT('Missed sync while waiting for child') unless defined $sync->blpop('wake_up_parent', 4);
 
@@ -199,8 +201,8 @@ subtest 'server is killed while waiting for subscribe' => sub {
     }
   }
   else {    ## child
-    my $sync = Redis->new(server => $srv, ssl => SSL_AVAILABLE, SSL_verify_mode => 0);
-    my $sub  = Redis->new(server => $another_server, ssl => SSL_AVAILABLE, SSL_verify_mode => 0);
+    my $sync = Redis->new(server => $srv, ssl => $use_ssl, SSL_verify_mode => 0);
+    my $sub  = Redis->new(server => $another_server, ssl => $use_ssl, SSL_verify_mode => 0);
     $sub->subscribe('chan', sub { });
 
     diag("child is ready to test, signal parent to kill our server");
@@ -229,7 +231,7 @@ subtest 'server is restarted while waiting for subscribe' => sub {
   if ($pid) {    ## parent, we'll wait for the child to die quickly
 
     ok(my $sync = Redis->new(server => $srv,
-                             ssl => SSL_AVAILABLE,
+                             ssl => $use_ssl,
                              SSL_verify_mode => 0), 'PARENT: connected to our test redis-server (sync parent)');
     BAIL_OUT('Missed sync while waiting for child') unless defined $sync->blpop('wake_up_parent', 4);
 
@@ -246,7 +248,7 @@ subtest 'server is restarted while waiting for subscribe' => sub {
 
     # relaunch it on the same port
     my ($yet_another_kill_switch, $yet_another_kill_switch_stunnel) = redis(port => $port);
-    my $pub  = Redis->new(server => $another_server, ssl => SSL_AVAILABLE, SSL_verify_mode => 0);
+    my $pub  = Redis->new(server => $another_server, ssl => $use_ssl, SSL_verify_mode => 0);
 
     diag("PARENT: has relaunched the server...");
     sleep 5;
@@ -270,9 +272,9 @@ subtest 'server is restarted while waiting for subscribe' => sub {
     }
   }
   else {    ## child
-    my $sync = Redis->new(server => $srv, ssl => SSL_AVAILABLE, SSL_verify_mode => 0);
+    my $sync = Redis->new(server => $srv, ssl => $use_ssl, SSL_verify_mode => 0);
     my $sub  = Redis->new(server => $another_server,
-                          ssl => SSL_AVAILABLE,
+                          ssl => $use_ssl,
                           SSL_verify_mode => 0,
                           reconnect => 10,
                           on_connect => sub { diag "CHILD: reconnected (with a 10s timeout)"; }

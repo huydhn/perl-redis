@@ -16,8 +16,10 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
+
 ok(my $r = Redis->new(server => $srv,
-                      ssl => SSL_AVAILABLE,
+                      ssl => $use_ssl,
                       SSL_verify_mode => 0), 'connected to our test redis-server');
 my $s2 = my $s1 = "test\x{80}";
 utf8::upgrade($s1); # no need to use 'use utf8' to call this

@@ -16,18 +16,20 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
+
 subtest 'REDIS_SERVER TCP' => sub {
   my $n = time();
-  my $r = Redis->new(server => $srv, ssl => SSL_AVAILABLE, SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE);
+  my $r = Redis->new(server => $srv, ssl => $use_ssl, SSL_verify_mode => 0);
   $r->set($$ => $n);
 
   local $ENV{REDIS_SERVER} = $srv;
-  is(exception { $r = Redis->new(ssl => SSL_AVAILABLE, SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE) },
+  is(exception { $r = Redis->new(ssl => $use_ssl, SSL_verify_mode => 0) },
      undef, "Direct IP/Port address on REDIS_SERVER works ($srv)",);
   is($r->get($$), $n, '... connected to the expected server');
 
   $ENV{REDIS_SERVER} = "tcp:$srv";
-  is(exception { $r = Redis->new(ssl => SSL_AVAILABLE, SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE) },
+  is(exception { $r = Redis->new(ssl => $use_ssl, SSL_verify_mode => 0) },
      undef, 'Direct IP/Port address (with tcp prefix) on REDIS_SERVER works',);
   is($r->get($$), $n, '... connected to the expected server');
 };

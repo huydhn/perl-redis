@@ -15,10 +15,12 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
+
 subtest 'non-block TCP' => sub {
   ok(my $r = Redis->new(server => $srv,
-                        ssl => SSL_AVAILABLE,
-                        SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE), 'connected to our test redis-server via TCP');
+                        ssl => $use_ssl,
+                        SSL_verify_mode => 0), 'connected to our test redis-server via TCP');
 
   ## Try to read from server (nothing sent, so nothing to read)
   ## But kill if we block

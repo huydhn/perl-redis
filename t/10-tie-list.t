@@ -15,13 +15,14 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
 
 ## Setup
 my @my_list;
 ok(my $redis = tie(@my_list, 'Redis::List', 'my_list',
                    server => $srv,
-                   ssl => SSL_AVAILABLE,
-                   SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE), 'tied to our test redis-server');
+                   ssl => $use_ssl,
+                   SSL_verify_mode => 0), 'tied to our test redis-server');
 ok($redis->ping, 'pinged fine');
 isa_ok($redis, 'Redis::List');
 

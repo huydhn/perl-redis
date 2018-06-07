@@ -16,7 +16,9 @@ END {
   $t->() if $t;
 }
 
-my $o = Redis->new(server => $srv, ssl => SSL_AVAILABLE, SSL_verify_mode => 0);
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
+
+my $o = Redis->new(server => $srv, ssl => $use_ssl, SSL_verify_mode => 0);
 
 ## Make sure SCRIPT commands are available
 eval { $o->script_flush };

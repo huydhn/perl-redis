@@ -18,11 +18,12 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
 
 subtest 'Command without connection, no reconnect' => sub {
   ok(my $r = Redis->new(reconnect => 0,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
   ok($r->quit, 'close connection to the server');
 
@@ -32,7 +33,7 @@ subtest 'Command without connection, no reconnect' => sub {
 subtest 'Command without connection or timeout, with database change, with reconnect' => sub {
   ok(my $r = Redis->new(reconnect => 2,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
 
   ok($r->select(4), 'send command with reconnect');
@@ -45,7 +46,7 @@ subtest 'Command without connection or timeout, with database change, with recon
 subtest 'Reconnection discards pending commands' => sub {
   ok(my $r = Redis->new(reconnect => 2,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
 
   my $processed_pending = 0;
@@ -61,7 +62,7 @@ subtest 'Conservative Reconnection dies on pending commands' => sub {
   ok(my $r = Redis->new(reconnect => 2,
                         conservative_reconnect => 1,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0),
      'connected to our test redis-server');
 
@@ -81,7 +82,7 @@ subtest 'Conservative Reconnection dies on pending commands' => sub {
 subtest 'INFO commands with extra logic triggers reconnect' => sub {
   ok(my $r = Redis->new(reconnect => 2,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
 
   ok($r->quit, 'close connection to the server');
@@ -94,7 +95,7 @@ subtest 'INFO commands with extra logic triggers reconnect' => sub {
 subtest 'KEYS commands with extra logic triggers reconnect' => sub {
   ok(my $r = Redis->new(reconnect => 2,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
 
   ok($r->flushdb, 'delete all keys');
@@ -110,7 +111,7 @@ subtest 'KEYS commands with extra logic triggers reconnect' => sub {
 subtest "Bad commands don't trigger reconnect" => sub {
   ok(my $r = Redis->new(reconnect => 2,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
 
   my $prev_sock = "$r->{sock}";
@@ -126,7 +127,7 @@ subtest "Bad commands don't trigger reconnect" => sub {
 subtest 'Reconnect code clears sockect ASAP' => sub {
   ok(my $r = Redis->new(reconnect => 3,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
   _wait_for_redis_timeout();
   is(exception { $r->quit }, undef, "Quit doesn't die if we are already disconnected");
@@ -136,9 +137,10 @@ subtest 'Reconnect code clears sockect ASAP' => sub {
 subtest "Reconnect gives up after timeout" => sub {
   ok(my $r = Redis->new(reconnect => 3,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
   $c->();    ## Make sure the server is dead
+  $t->();    ## Make sure the tunnel is down
 
   my $t0 = [gettimeofday];
   like(
@@ -150,19 +152,21 @@ subtest "Reconnect gives up after timeout" => sub {
 };
 
 subtest "Reconnect during transaction" => sub {
-  $c->();    ## Make previous server is dead
+  $c->();    ## Make sure previous server is dead
+  $t->();    ## Make sure previous tunnel is down
 
   my $port = empty_port();
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "spawn redis on port $port");
   ok(my $r = Redis->new(reconnect => 3,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
 
   ok($r->multi(), 'start transacion');
   ok($r->set('reconnect_1' => 1), 'set first key');
 
   $c->();
+  $t->();
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "respawn redis on port $port");
 
   like(exception { $r->set('reconnect_2' => 2) }, qr{reconnect disabled inside transaction}, 'set second key');
@@ -173,13 +177,14 @@ subtest "Reconnect during transaction" => sub {
 };
 
 subtest "Reconnect works after WATCH + MULTI + EXEC" => sub {
-  $c->();    ## Make previous server is dead
+  $c->();    ## Make sure previous server is dead
+  $t->();    ## Make sure previous tunnel is down
 
   my $port = empty_port();
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "spawn redis on port $port");
   ok(my $r = Redis->new(reconnect => 3,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
 
   ok($r->set('watch' => 'watch'), 'set watch key');
@@ -189,19 +194,21 @@ subtest "Reconnect works after WATCH + MULTI + EXEC" => sub {
   ok($r->exec(), 'execute transaction');
 
   $c->();
+  $t->();
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "respawn redis on port $port");
 
   ok($r->set('reconnect' => 1), 'setting key should not fail');
 };
 
 subtest "Reconnect works after WATCH + MULTI + DISCARD" => sub {
-  $c->();    ## Make previous server is dead
+  $c->();    ## Make sure previous server is dead
+  $t->();    ## Make sure previous tunnel is down
 
   my $port = empty_port();
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "spawn redis on port $port");
   ok(my $r = Redis->new(reconnect => 3,
                         server => $srv,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
 
   ok($r->set('watch' => 'watch'), 'set watch key');
@@ -211,6 +218,7 @@ subtest "Reconnect works after WATCH + MULTI + DISCARD" => sub {
   ok($r->discard(), 'dscard transaction');
 
   $c->();
+  $t->();
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "respawn redis on port $port");
 
   ok($r->set('reconnect' => 1), 'setting second key should not fail');
@@ -226,7 +234,7 @@ subtest 'Reconnection by read timeout discards pending commands' => sub {
   ok(my $r = Redis->new(server => $srv2,
                         read_timeout => 1,
                         reconnect => 1,
-                        ssl => SSL_AVAILABLE,
+                        ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
 
   ok($r->set(foo => 'bar'), 'set foo bar');

@@ -23,22 +23,72 @@ sub redis {
     @_,
   );
 
-  my ($fh, $fn) = File::Temp::tempfile();
+  my $use_ssl = SSL_AVAILABLE;
+
+  # Sentinel mode does not support SSL/TLS yet so we have this
+  # option to explicitly turn off SSL/TLS in testing.
+  $use_ssl = 0 if $params{no_ssl};
 
   my $port = empty_port();
 
   my $local_port = $port;
 
-  if ( ! SSL_AVAILABLE ) {
+  my $stunnel_port = empty_port();
+
+  if ( ! $use_ssl ) {
     # Use this specific port in non-TLS mode
     $params{port}
       and $local_port = $params{port};
+  } else {
+    # Reuse the same port if it is specified
+    $params{port}
+      and $stunnel_port = $params{port};
   }
 
   my $addr = "127.0.0.1:$local_port";
 
   unlink("redis-server-$addr.log");
   unlink('dump.rdb');
+
+  # Spawn the tunnel first so that we know if we can test SSL/TLS setup
+  my $stunnel_addr = "127.0.0.1:$stunnel_port";
+
+  my ($ver, $c, $t);
+
+  if ( $use_ssl ) {
+    Test::More::diag("Spawn stunnel $stunnel_addr:$addr") if $ENV{REDIS_DEBUG};
+
+    my ($stunnel_fh, $stunnel_fn) = File::Temp::tempfile();
+
+    $stunnel_fh->print("pid=
+debug = 0
+foreground = yes
+
+[redis]
+accept = $stunnel_port
+connect = $addr
+cert = t/stunnel/cert.pem
+key = t/stunnel/key.pem
+");
+    $stunnel_fh->flush;
+
+    my $stunnel_path = $ENV{STUNNEL_PATH} || 'stunnel';
+    if (!can_run($stunnel_path)) {
+      Test::More::diag("Could not find binary stunnel, revert to plain text Redis server");
+      $use_ssl = 0;
+    }
+
+    eval { $t = spawn_tunnel($stunnel_path, $stunnel_fn) };
+    if (my $e = $@) {
+      reap();
+      Test::More::diag("Could not start stunnel, revert to plain text Redis server");
+      $use_ssl = 0
+    }
+
+    sleep(SSL_WAIT);
+  }
+
+  my ($fh, $fn) = File::Temp::tempfile();
 
   $fh->print("
     timeout $params{timeout}
@@ -59,7 +109,6 @@ sub redis {
     return;
   }
 
-  my ($ver, $c, $t);
   eval { ($ver, $c) = spawn_server($redis_server_path, $fn, $addr) };
   if (my $e = $@) {
     reap();
@@ -83,50 +132,13 @@ sub redis {
     }
   }
 
-  if ( SSL_AVAILABLE ) {
-    my $stunnel_port = empty_port();
-
-    # Reuse the same port if it is specified
-    $params{port}
-      and $stunnel_port = $params{port};
-
-    my $stunnel_addr = "127.0.0.1:$stunnel_port";
-
-    Test::More::diag("Spawn stunnel $stunnel_addr:$addr") if $ENV{REDIS_DEBUG};
-
-    my ($stunnel_fh, $stunnel_fn) = File::Temp::tempfile();
-
-    $stunnel_fh->print("pid=
-debug = 0
-foreground = yes
-
-[redis]
-accept = $stunnel_port
-connect = $addr
-cert = t/stunnel/cert.pem
-key = t/stunnel/key.pem
-");
-    $stunnel_fh->flush;
-
-    my $stunnel_path = $ENV{STUNNEL_PATH} || 'stunnel';
-    if (!can_run($stunnel_path)) {
-      Test::More::diag("Could not find binary stunnel, revert to plain text Redis server");
-      return ($c, undef, $addr, $ver, split(/[.]/, $ver), $local_port);
-    }
-
-    eval { $t = spawn_tunnel($stunnel_path, $stunnel_fn) };
-    if (my $e = $@) {
-      reap();
-      Test::More::diag("Could not start stunnel, revert to plain text Redis server");
-      return ($c, undef, $addr, $ver, split(/[.]/, $ver), $local_port);
-    }
-
-    sleep(SSL_WAIT);
+  if ( $use_ssl ) {
     # Connect to Redis through stunnel
     return ($c, $t, $stunnel_addr, $ver, split(/[.]/, $ver), $stunnel_port);
+  } else {
+    # Connect to Redis directly
+    return ($c, undef, $addr, $ver, split(/[.]/, $ver), $local_port);
   }
-
-  return ($c, undef, $addr, $ver, split(/[.]/, $ver), $local_port);
 }
 
 sub sentinel {

@@ -16,12 +16,14 @@ END {
   $t->() if $t;
 }
 
+my $use_ssl = $t ? SSL_AVAILABLE : 0;
+
 my $n;
 is(
   exception { $n = Redis->new(server => $srv,
                               name => 'no_auto_connect',
                               no_auto_connect_on_new => 1,
-                              ssl => SSL_AVAILABLE,
+                              ssl => $use_ssl,
                               SSL_verify_mode => 0) },
   undef, 'Got an unconnected object',
 );
@@ -33,7 +35,7 @@ my $o;
 is(
   exception { $o = Redis->new(server => $srv,
                               name => 'my_name_is_glorious',
-                              ssl => SSL_AVAILABLE,
+                              ssl => $use_ssl,
                               SSL_verify_mode => 0) },
   undef, 'connected to our test redis-server',
 );
@@ -381,7 +383,7 @@ ok($o->quit,  'quit');
 ok(!$o->quit, 'quit again, ok');
 ok(!$o->ping, '... but after quit() returns false');
 
-$o = Redis->new(server => $srv, ssl => SSL_AVAILABLE, SSL_verify_mode => 0);
+$o = Redis->new(server => $srv, ssl => $use_ssl, SSL_verify_mode => 0);
 ok($o->shutdown(),  'shutdown() once is ok');
 ok(!$o->shutdown(), '... twice also lives, but returns false');
 ok(!$o->ping(),     'ping() will be false after shutdown()');
@@ -390,7 +392,7 @@ ok(!$o->ping(),     'ping() will be false after shutdown()');
 $t->() if $t;
 
 like(
-  exception { Redis->new(server => $srv, ssl => SSL_AVAILABLE, SSL_verify_mode => 0) },
+  exception { Redis->new(server => $srv, ssl => $use_ssl, SSL_verify_mode => 0) },
   qr/Could not connect to Redis server at $srv/,
   'Failed connection throws exception'
 );
