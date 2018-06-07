@@ -29,10 +29,10 @@ use constant EAGAIN      => eval {Errno::EAGAIN} || -1E9;
 use constant EINTR       => eval {Errno::EINTR} || -1E9;
 use constant ECONNRESET  => eval {Errno::ECONNRESET} || -1E9;
 
-# According to IO::Socket::SSL perldoc, 16k is the maximum
-# size of an SSL frame and because sysread returns data from
-# only a single SSL frame you guarantee this way, that there
-# are no pending data.
+# According to IO::Socket::SSL documentation, 16k is the maximum
+# size of an SSL frame and because sysread returns data from only
+# a single SSL frame you guarantee this way, that there is no pending
+# data.
 use constant BUFSIZE     => 16_384;
 
 sub _maybe_enable_timeouts {
@@ -151,7 +151,7 @@ sub new {
 
               if (exists $args{ssl} and $args{ssl}) {
                   if ( ! SSL_AVAILABLE ) {
-                      croak("Require IO::Socket::SSL to connect to Redis using SSL!");
+                      croak("IO::Socket::SSL is required for connecting to Redis using SSL");
                   }
 
                   $socket_class = 'IO::Socket::SSL';
@@ -181,7 +181,7 @@ sub new {
 
         if (exists $args{ssl} and $args{ssl}) {
             if ( ! SSL_AVAILABLE ) {
-                croak("Require IO::Socket::SSL to connect to Redis using SSL!");
+                croak("IO::Socket::SSL is required for connecting to Redis using SSL");
             }
 
             $socket_class = 'IO::Socket::SSL';
@@ -487,7 +487,8 @@ sub wait_for_messages {
           }
         } else {
           $cond = sub {
-            # continue if there is still some data left
+            # continue if there is still some data left.  If the buffer is
+            # larger than 16K, there won't be any pending data left though
             return $self->{__buf} || $sock->pending;
           }
         }
@@ -751,7 +752,7 @@ sub __send_command {
 
   if ( ! SSL_AVAILABLE ) {
     # Check to see if socket was closed: reconnect on EOF.  Note that
-    # this function work differently with SSL socket cause it's not
+    # this function works differently with a SSL socket cause it's not
     # possible to read just a few bytes from a TLS frame.
     my $status = $self->__try_read_sock($sock);
     $self->__throw_reconnect('Not connected to any server')
@@ -906,11 +907,11 @@ sub __try_read_sock {
               # it cause it's not possible to read only a few bytes from an SSL
               # frame.
               $res = $sock->peek($data, BUFSIZE);
-              $err = 0 + $!;
           } else {
               $res = recv($sock, $data, BUFSIZE, MSG_DONTWAIT);
-              $err = 0 + $!;
           }
+
+          $err = 0 + $!;
       }
 
       if (defined $res) {
@@ -979,6 +980,15 @@ __END__
 
     ## Use UNIX domain socket
     my $redis = Redis->new(sock => '/path/to/socket');
+
+    ## Connect to Redis over a secure SSL/TLS channel.  See
+    ## IO::Socket::SSL documentation for more information
+    ## about SSL_verify_mode parameter.
+    my $redis = Redis->new(
+        server => 'redis.tls.example.com:8080',
+        ssl => 1,
+        SSL_verify_mode => SSL_VERIFY_PEER,
+    );
 
     ## Enable auto-reconnect
     ## Try to reconnect every 1s up to 60 seconds until success
@@ -1133,6 +1143,7 @@ So, if you are working with character strings, you should pre-encode or post-dec
 
     my $r = Redis->new( server => '192.168.0.1:6379', debug => 0 );
     my $r = Redis->new( server => '192.168.0.1:6379', encoding => undef );
+    my $r = Redis->new( server => '192.168.0.1:6379', ssl => 1, SSL_verify_mode => SSL_VERIFY_PEER );
     my $r = Redis->new( sock => '/path/to/sock' );
     my $r = Redis->new( reconnect => 60, every => 5000 );
     my $r = Redis->new( password => 'boo' );
@@ -1303,6 +1314,18 @@ documentation|http://redis.io/commands/client-setname> for all the juicy
 details. This feature is safe to use with all versions of Redis servers. If C<<
 CLIENT SETNAME >> support is not available (Redis servers 2.6.9 and above
 only), the name parameter is ignored.
+
+=head3 C<< ssl >>
+
+You can connect to Redis over SSL/TLS by setting this flag if the target Redis
+server or cluster has been setup to support SSL/TLS.  This requires IO::Socket::SSL
+to be installed on the client.  It's off by default.
+
+=head3 C<< SSL_verify_mode >>
+
+This parameter will be applied when C<< ssl >> flag is set.  It sets the verification
+mode for the peer certificate.  It's compatible with the parameter with the same name
+in IO::Socket::SSL.
 
 =head3 C<< debug >>
 
