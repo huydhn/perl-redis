@@ -26,8 +26,6 @@ my $use_ssl = $t ? SSL_AVAILABLE : 0;
 
 diag "redis address : $redis_addr\n";
 
-sleep(60);
-
 my @ret2 = sentinel( redis_port => $redis_port );
 my $sentinel_port = pop @ret2;
 my ($c2, $sentinel_addr) = @ret2;
@@ -78,7 +76,7 @@ sleep 3;
 {
    # connect to the master via the sentinel
    my $redis = Redis->new(sentinels => [ $sentinel_addr ], service => 'mymaster');
-   is_deeply({ map { $_ => 1} @{$redis->{sentinels} || []} },
+   is_deeply({ map { $_ => 1 } @{$redis->{sentinels} || []} },
              { $sentinel_addr => 1, $sentinel2_addr => 1},
              "Redis client has connected and updated its sentinels");
 
