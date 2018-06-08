@@ -133,11 +133,11 @@ sub new {
                             $sentinel_address => 1,
                           );
                   $self->{sentinels} = [
-                      ( sort { $h{$a} <=> $h{$b} } keys %h ), # sorted existing sentinels,
-                      grep { ! $h{$_}; }                      # list of unknown
-                      map { +{ @$_ }->{name}; }               # names of
-                      $sentinel->sentinel(                    # sentinels 
-                        sentinels => $self->{service}         # for this service
+                      ( sort { $h{$a} <=> $h{$b} } keys %h ),         # sorted existing sentinels,
+                      grep { ! $h{$_}; }                              # list of unknown
+                      map { +{ @$_ }->{ip} . ":" . { @$_ }->{port}; } # names of
+                      $sentinel->sentinel(                            # sentinels
+                        sentinels => $self->{service}                 # for this service
                       )
                   ];
               }
