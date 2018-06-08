@@ -150,13 +150,7 @@ sub new {
               );
 
               if (exists $args{ssl} and $args{ssl}) {
-                  if ( ! SSL_AVAILABLE ) {
-                      croak("IO::Socket::SSL is required for connecting to Redis using SSL");
-                  }
-
-                  $self->{ssl}  = 1;
-                  $socket_class = 'IO::Socket::SSL';
-                  $socket_args{SSL_verify_mode} = $args{SSL_verify_mode} // 1;
+                  croak("Redis client does not support SSL with Redis Sentinel yet");
               }
               else {
                   $self->{ssl}  = 0;
