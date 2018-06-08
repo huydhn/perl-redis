@@ -285,10 +285,6 @@ sub spawn_tunnel {
   die "Could not fork() stunnel: $!";
 }
 
-sub has_stunnel {
-
-}
-
 sub reap {
   my ($pid, $limit) = @_;
   $pid   = -1 unless $pid;
