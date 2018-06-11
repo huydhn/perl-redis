@@ -139,8 +139,8 @@ subtest "Reconnect gives up after timeout" => sub {
                         server => $srv,
                         ssl => $use_ssl,
                         SSL_verify_mode => 0), 'connected to our test redis-server');
-  $c->();    ## Make sure the server is dead
-  $t->();    ## Make sure the tunnel is down
+  $c->() if $c;    ## Make sure the server is dead
+  $t->() if $t;    ## Make sure the tunnel is down
 
   my $t0 = [gettimeofday];
   like(
@@ -152,8 +152,8 @@ subtest "Reconnect gives up after timeout" => sub {
 };
 
 subtest "Reconnect during transaction" => sub {
-  $c->();    ## Make sure previous server is dead
-  $t->();    ## Make sure previous tunnel is down
+  $c->() if $c;    ## Make sure previous server is dead
+  $t->() if $t;    ## Make sure previous tunnel is down
 
   my $port = empty_port();
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "spawn redis on port $port");
@@ -165,8 +165,8 @@ subtest "Reconnect during transaction" => sub {
   ok($r->multi(), 'start transacion');
   ok($r->set('reconnect_1' => 1), 'set first key');
 
-  $c->();
-  $t->();
+  $c->() if $c;
+  $t->() if $t;
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "respawn redis on port $port");
 
   like(exception { $r->set('reconnect_2' => 2) }, qr{reconnect disabled inside transaction}, 'set second key');
@@ -177,8 +177,8 @@ subtest "Reconnect during transaction" => sub {
 };
 
 subtest "Reconnect works after WATCH + MULTI + EXEC" => sub {
-  $c->();    ## Make sure previous server is dead
-  $t->();    ## Make sure previous tunnel is down
+  $c->() if $c;    ## Make sure previous server is dead
+  $t->() if $t;    ## Make sure previous tunnel is down
 
   my $port = empty_port();
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "spawn redis on port $port");
@@ -193,16 +193,16 @@ subtest "Reconnect works after WATCH + MULTI + EXEC" => sub {
   ok($r->set('reconnect' => 1), 'set key');
   ok($r->exec(), 'execute transaction');
 
-  $c->();
-  $t->();
+  $c->() if $c;
+  $t->() if $t;
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "respawn redis on port $port");
 
   ok($r->set('reconnect' => 1), 'setting key should not fail');
 };
 
 subtest "Reconnect works after WATCH + MULTI + DISCARD" => sub {
-  $c->();    ## Make sure previous server is dead
-  $t->();    ## Make sure previous tunnel is down
+  $c->() if $c;    ## Make sure previous server is dead
+  $t->() if $t;    ## Make sure previous tunnel is down
 
   my $port = empty_port();
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "spawn redis on port $port");
@@ -217,8 +217,8 @@ subtest "Reconnect works after WATCH + MULTI + DISCARD" => sub {
   ok($r->set('reconnect' => 1), 'set key');
   ok($r->discard(), 'dscard transaction');
 
-  $c->();
-  $t->();
+  $c->() if $c;
+  $t->() if $t;
   ok(($c, $t, $srv) = redis(port => $port, timeout => 1), "respawn redis on port $port");
 
   ok($r->set('reconnect' => 1), 'setting second key should not fail');
