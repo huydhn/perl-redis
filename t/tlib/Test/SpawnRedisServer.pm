@@ -75,17 +75,23 @@ key = t/stunnel/key.pem
     my $stunnel_path = $ENV{STUNNEL_PATH} || 'stunnel';
     if (!can_run($stunnel_path)) {
       Test::More::diag("Could not find binary stunnel, revert to plain text Redis server");
+
+      $addr = $stunnel_addr;
+      $local_port = $stunnel_port;
+
       $use_ssl = 0;
     }
+    else {
+      eval { $t = spawn_tunnel($stunnel_path, $stunnel_fn) };
 
-    eval { $t = spawn_tunnel($stunnel_path, $stunnel_fn) };
-    if (my $e = $@) {
-      reap();
-      Test::More::diag("Could not start stunnel, revert to plain text Redis server");
-      $use_ssl = 0
+      if (my $e = $@) {
+        reap();
+        Test::More::diag("Could not start stunnel, revert to plain text Redis server: $@");
+        $use_ssl = 0
+      }
     }
 
-    sleep(SSL_WAIT);
+    sleep(SSL_WAIT) if $use_ssl;
   }
 
   my ($fh, $fn) = File::Temp::tempfile();
