@@ -749,7 +749,6 @@ sub __send_command {
   }
 
   # this function works differently with a SSL socket cause it's not
-  # Check to see if socket was closed: reconnect on EOF.  Note that
   # possible to read just a few bytes from a TLS frame.
   my $status = $self->__try_read_sock($sock);
   $self->__throw_reconnect('Not connected to any server')
@@ -899,7 +898,7 @@ sub __try_read_sock {
           __fh_nonblocking_win32($sock, 0);
       } else {
           if ($self->{ssl}) {
-              # Use peek to see if there is any data available instead of reading
+              # use peek to see if there is any data available instead of reading
               # it cause it's not possible to read only a few bytes from an SSL
               # frame.  This does not work in WIN32
               $sock->blocking(0);
