@@ -388,8 +388,10 @@ ok($o->shutdown(),  'shutdown() once is ok');
 ok(!$o->shutdown(), '... twice also lives, but returns false');
 ok(!$o->ping(),     'ping() will be false after shutdown()');
 
-# Shutdown the SSL tunnel as well
+# Shutdown the SSL tunnel if it is used
 $t->() if $t;
+# and wait for the server to shutdown
+sleep(1);
 
 like(
   exception { Redis->new(server => $srv, ssl => $use_ssl, SSL_verify_mode => 0) },
