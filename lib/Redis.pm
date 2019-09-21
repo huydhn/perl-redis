@@ -907,9 +907,9 @@ sub __try_read_sock {
           __fh_nonblocking_win32($sock, 0);
       } else {
           if ($self->{ssl}) {
-              # use peek to see if there is any data available instead of reading
-              # it cause it's not possible to read only a few bytes from an SSL
-              # frame.  This does not work in WIN32
+              ## use peek to see if there is any data available instead of reading
+              ## it cause it's not possible to read only a few bytes from an SSL
+              ## frame.  This does not work in WIN32
               $sock->blocking(0);
               $res = $sock->peek($data, BUFSIZE);
               $sock->blocking(1);

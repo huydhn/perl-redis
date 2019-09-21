@@ -9,6 +9,7 @@ use Redis;
 use lib 't/tlib';
 use Test::SpawnRedisServer qw( redis reap );
 
+use constant DEFAULT_DELAY => 5;
 use constant SSL_AVAILABLE => eval { require IO::Socket::SSL } || 0;
 
 my ($c, $t, $srv) = redis();
@@ -244,14 +245,14 @@ subtest 'server is restarted while waiting for subscribe' => sub {
     note("PARENT: killed pub/sub redis server, signal child to proceed");
     $sync->lpush('wake_up_child', 'the redis-server is dead, waiting before respawning it');
 
-    sleep 5;
+    sleep DEFAULT_DELAY;
 
     # relaunch it on the same port
     my ($yet_another_kill_switch, $yet_another_kill_switch_stunnel) = redis(port => $port);
-    my $pub  = Redis->new(server => $another_server, ssl => $use_ssl, SSL_verify_mode => 0);
+    my $pub = Redis->new(server => $another_server, ssl => $use_ssl, SSL_verify_mode => 0);
 
     note("PARENT: has relaunched the server...");
-    sleep 5;
+    sleep DEFAULT_DELAY;
 
     is($pub->publish('chan', 'v1'), 1, "PARENT: published and the child is subscribed");
 

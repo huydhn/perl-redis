@@ -23,7 +23,7 @@ sub redis {
     @_,
   );
 
-  my $use_ssl = SSL_AVAILABLE;
+  my $use_ssl = $ENV{USE_SSL} ? SSL_AVAILABLE : 0;
 
   # Sentinel mode does not support SSL/TLS yet so we have this
   # option to explicitly turn off SSL/TLS in testing.
