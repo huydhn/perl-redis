@@ -9,6 +9,7 @@ use Redis;
 use lib 't/tlib';
 use Test::SpawnRedisServer qw( redis reap );
 
+use constant DEFAULT_DELAY => 5;
 use constant SSL_AVAILABLE => eval { require IO::Socket::SSL } || 0;
 
 my ($c, $t, $srv) = redis();
@@ -186,10 +187,10 @@ subtest 'server is killed while waiting for subscribe' => sub {
       ok($another_kill_switch_stunnel->(), "stunnel killed");
     }
 
-    diag("parent killed pub/sub redis server, signal child to proceed");
+    note("parent killed pub/sub redis server, signal child to proceed");
     $sync->lpush('wake_up_child', 'the redis-server is dead, do your thing');
 
-    diag("parent waiting for child $pid...");
+    note("parent waiting for child $pid...");
     my $failed = reap($pid, 5);
     if ($failed) {
       fail("wait_for_messages() hangs when the server goes away...");
@@ -205,12 +206,12 @@ subtest 'server is killed while waiting for subscribe' => sub {
     my $sub  = Redis->new(server => $another_server, ssl => $use_ssl, SSL_verify_mode => 0);
     $sub->subscribe('chan', sub { });
 
-    diag("child is ready to test, signal parent to kill our server");
+    note("child is ready to test, signal parent to kill our server");
     $sync->lpush('wake_up_parent', 'we are ready on this side, kill the server...');
     die '## Missed sync while waiting for parent' unless defined $sync->blpop('wake_up_child', 4);
 
     ## This is the test, next wait_for_messages() should not block
-    diag("now, check wait_for_messages(), should die...");
+    note("now, check wait_for_messages(), should die...");
     like(
       exception { $sub->wait_for_messages(0) },
       qr/EOF from server/,
@@ -241,21 +242,21 @@ subtest 'server is restarted while waiting for subscribe' => sub {
       ok($another_kill_switch_stunnel->(), "stunnel killed");
     }
 
-    diag("PARENT: killed pub/sub redis server, signal child to proceed");
+    note("PARENT: killed pub/sub redis server, signal child to proceed");
     $sync->lpush('wake_up_child', 'the redis-server is dead, waiting before respawning it');
 
-    sleep 5;
+    sleep DEFAULT_DELAY;
 
     # relaunch it on the same port
     my ($yet_another_kill_switch, $yet_another_kill_switch_stunnel) = redis(port => $port);
-    my $pub  = Redis->new(server => $another_server, ssl => $use_ssl, SSL_verify_mode => 0);
+    my $pub = Redis->new(server => $another_server, ssl => $use_ssl, SSL_verify_mode => 0);
 
-    diag("PARENT: has relaunched the server...");
-    sleep 5;
+    note("PARENT: has relaunched the server...");
+    sleep DEFAULT_DELAY;
 
     is($pub->publish('chan', 'v1'), 1, "PARENT: published and the child is subscribed");
 
-    diag("PARENT: waiting for child $pid...");
+    note("PARENT: waiting for child $pid...");
     my $failed = reap($pid, 5);
     if ($failed) {
       fail("PARENT: wait_for_messages() hangs when the server goes away...");
@@ -277,24 +278,24 @@ subtest 'server is restarted while waiting for subscribe' => sub {
                           ssl => $use_ssl,
                           SSL_verify_mode => 0,
                           reconnect => 10,
-                          on_connect => sub { diag "CHILD: reconnected (with a 10s timeout)"; }
+                          on_connect => sub { note "CHILD: reconnected (with a 10s timeout)"; }
                          );
 
     my %got;
     $sub->subscribe('chan', sub { my ($v, $t, $s) = @_; $got{$s} = "$v:$t" });
 
-    diag("CHILD: is ready to test, signal parent to restart our server");
+    note("CHILD: is ready to test, signal parent to restart our server");
     $sync->lpush('wake_up_parent', 'we are ready on this side, kill the server...');
     die '## Missed sync while waiting for parent' unless defined $sync->blpop('wake_up_child', 4);
 
     ## This is the test, wait_for_messages() should reconnect to the respawned server
     while (1) {
-        diag("CHILD: launch wait_for_messages(2), with reconnect...");
+        note("CHILD: launch wait_for_messages(2), with reconnect...");
         my $r = $sub->wait_for_messages(2);
         $r and last;
-        diag("CHILD: after 2 sec, nothing yet, retrying");
+        note("CHILD: after 2 sec, nothing yet, retrying");
     }
-    diag("CHILD: child received the message");
+    note("CHILD: child received the message");
     cmp_deeply(\%got, { 'chan' => 'v1:chan' }, "CHILD: the message is what we want");
     exit(0);
   }
